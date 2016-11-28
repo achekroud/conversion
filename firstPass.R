@@ -152,16 +152,16 @@ gaf_raw %>%
 dev.off()
 
 
-cog_raw %>%
-    mutate(ID = paste(SiteNumber,SubjectNumber, sep="_")) %>%
-    select(ID, VisitNumber, matrics_cptip_tscore) %>%
-    left_join(., select(temp, ID, cluster), by = "ID") %>%
-    arrange(ID, VisitNumber) %>%
-    filter(complete.cases(.)) %>%
-    group_by(ID) %>%
-    summarise_each(funs(last)) %>%
-    ggplot() +
-    geom_violin(aes(x= factor(cluster), y = matrics_cptip_tscore))
+# cog_raw %>%
+#     mutate(ID = paste(SiteNumber,SubjectNumber, sep="_")) %>%
+#     select(ID, VisitNumber, matrics_cptip_tscore) %>%
+#     left_join(., select(temp, ID, cluster), by = "ID") %>%
+#     arrange(ID, VisitNumber) %>%
+#     filter(complete.cases(.)) %>%
+#     group_by(ID) %>%
+#     summarise_each(funs(last)) %>%
+#     ggplot() +
+#     geom_violin(aes(x= factor(cluster), y = matrics_cptip_tscore))
 
 
 # ditch matrics
