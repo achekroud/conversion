@@ -25,7 +25,7 @@ pop_raw <- file.path(dataDir, "napls_pops.xlsx") %>% read_excel()
 pop     <- pop_raw %>%
     filter(SubjectType == "Prodromal") %>%
     mutate(ID = paste(SiteNumber,SubjectNumber, sep="_")) %>%
-    mutate(RID = paste(SiteNumber,SubjectNumber,VisitNumber, sep="_")) %>%
+    mutate(RID = paste0(SiteNumber,"_",SubjectNumber,"|",VisitNumber)) %>%
     select(ID, pops_criteria_met)
     
 
@@ -35,7 +35,7 @@ gaf     <- gaf_raw %>%
     filter(SubjectType == "Prodromal") %>%
     filter(VisitNumber %in% keepVisits) %>%
     mutate(ID = paste(SiteNumber,SubjectNumber, sep="_")) %>%
-    mutate(RID = paste(SiteNumber,SubjectNumber,VisitNumber, sep="_")) %>%
+    mutate(RID = paste0(SiteNumber,"_",SubjectNumber,"|",VisitNumber)) %>%
     select(RID, ID, VisitNumber, gaf_CurrentScore)
 
 
@@ -44,8 +44,8 @@ gaf     <- gaf_raw %>%
 #     filter(SubjectType == "Prodromal") %>%
 #     filter(VisitNumber %in% keepVisits) %>% 
 #     mutate(ID = paste(SiteNumber,SubjectNumber, sep="_")) %>%
-#     mutate(RID = paste(SiteNumber,SubjectNumber,VisitNumber, sep="_")) %>%
-#     select(RID,ID, VisitNumber, matrics_tmt_ptile)
+# mutate(RID = paste0(SiteNumber,"_",SubjectNumber,"|",VisitNumber)) %>%
+    #     select(RID,ID, VisitNumber, matrics_tmt_ptile)
 
 
 sop_raw   <- file.path(dataDir, "napls_sops.xlsx") %>% read_excel()
@@ -53,7 +53,7 @@ sop       <- sop_raw %>%
     filter(SubjectType == "Prodromal") %>%
     filter(VisitNumber %in% keepVisits) %>% 
     mutate(ID = paste(SiteNumber,SubjectNumber, sep="_")) %>%
-    mutate(RID = paste(SiteNumber,SubjectNumber,VisitNumber, sep="_")) %>%
+    mutate(RID = paste0(SiteNumber,"_",SubjectNumber,"|",VisitNumber)) %>%
     select(RID, ID, VisitNumber, ends_with("_SOPS")) %>%
     mutate(Px_tot = (P1_SOPS + P2_SOPS + P3_SOPS + P4_SOPS + P5_SOPS),
            Nx_tot = (N1_SOPS + N2_SOPS + N3_SOPS + N4_SOPS + N5_SOPS + N6_SOPS),
@@ -69,7 +69,7 @@ gfs       <- gfs_raw %>%
     filter(SubjectType == "Prodromal") %>%
     filter(VisitNumber %in% keepVisits) %>% 
     mutate(ID = paste(SiteNumber,SubjectNumber, sep="_")) %>%
-    mutate(RID = paste(SiteNumber,SubjectNumber,VisitNumber, sep="_")) %>%
+    mutate(RID = paste0(SiteNumber,"_",SubjectNumber,"|",VisitNumber)) %>%
     select(RID,ID, VisitNumber, gfs_current)
 
 
@@ -78,27 +78,27 @@ gfr       <- gfr_raw %>%
     filter(SubjectType == "Prodromal") %>%
     filter(VisitNumber %in% keepVisits) %>% 
     mutate(ID = paste(SiteNumber,SubjectNumber, sep="_")) %>%
-    mutate(RID = paste(SiteNumber,SubjectNumber,VisitNumber, sep="_")) %>%
+    mutate(RID = paste0(SiteNumber,"_",SubjectNumber,"|",VisitNumber)) %>%
     select(RID,ID, VisitNumber, gfr_current)
 
+psych::describe(gfr)
 
+# > which((unique(sop$RID) %in% unique(gfr$RID) ) == FALSE) 
+# [1]   41 1696 2683
 
+all <- full_join(sop, gfr, by = "RID") %>% 
+    separate(RID, into = c("ID", "visit"), sep = "[|]", remove = FALSE) %>%
+    select(RID, ID, visit, gfr_current, Px_tot) %>% 
+    gather(key = "measure", value = "score", gfr_current:Px_tot) %>%  
+    transmute(ID, score, visitmeasure = paste(visit, measure, sep="_")) %>% 
+    spread(key = "visitmeasure", value = "score") %>%
+    select(ID, ends_with("_current"), ends_with("_tot"))
 
-all <- full_join(gaf, cog, by = "RID") %>% 
-    full_join(., sop, by = "RID") %>%
-    select(RID, ID, VisitNumber, gaf_CurrentScore, matrics_tmt_ptile,SOP_t) %>%
-    gather(key = "measure", value = "score", gaf_CurrentScore:SOP_t) %>% 
-    transmute(ID = ID, 
-              score = score,
-              visitmeasure = paste(VisitNumber, measure, sep="_")) %>%
-    arrange(ID) %>%
-    spread(key = "visitmeasure", value = "score")
+all$nas <- apply(all[,2:11], 1, function(x) length(x[is.na(x)]))
 
-all$nas <- apply(all[,2:9], 1, function(x) length(x[is.na(x)]))
+all <- all %>% filter(nas < 8)
 
-all <- all %>% filter(nas < 3)
-
-clusterMe <- as.matrix(all[,2:10])
+clusterMe <- as.matrix(all[,2:11])
 rownames(clusterMe) <- all$ID
 
 # corMat <- 1 - cor(t(clusterMe), use="pairwise")
@@ -150,6 +150,28 @@ gaf_raw %>%
                  width=0.1, fill="white", outlier.size=0, alpha=0.5) +
     ggtitle("Last available GAF_current score by cluster")
 dev.off()
+
+
+gaf_raw %>%
+    mutate(ID = paste(SiteNumber,SubjectNumber, sep="_")) %>%
+    select(ID, VisitNumber, gaf_CurrentScore) %>%
+    left_join(., select(temp, ID, cluster), by = "ID") %>%
+    arrange(ID, VisitNumber) %>%
+    filter(complete.cases(.)) %>%
+    ggplot() +
+    geom_line(aes(x = VisitNumber, y = gaf_CurrentScore, group = ID, alpha = 0.1)) +
+    facet_wrap( ~ cluster)
+
+gfs_raw %>%
+    mutate(ID = paste(SiteNumber,SubjectNumber, sep="_")) %>%
+    select(ID, VisitNumber, gfs_current) %>%
+    left_join(., select(temp, ID, cluster), by = "ID") %>%
+    arrange(ID, VisitNumber) %>%
+    filter(complete.cases(.)) %>%
+    ggplot() +
+    geom_line(aes(x = VisitNumber, y = gfs_current, group = ID, alpha = 0.1)) +
+    facet_wrap( ~ cluster)
+
 
 
 # cog_raw %>%
